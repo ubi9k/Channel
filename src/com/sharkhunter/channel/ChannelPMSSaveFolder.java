@@ -116,7 +116,7 @@ public class ChannelPMSSaveFolder extends VirtualFolder {
 					String rUrl=url;
 					if(scraper!=null)
 						rUrl=scraper.scrape(ch, url, proc, f, this,false,null,
-											embedSub,stash);
+											embedSub,stash,null);
 					oh.update(rUrl, rName, add);
 					me.childDone();
 					return add;
@@ -132,7 +132,7 @@ public class ChannelPMSSaveFolder extends VirtualFolder {
 						String rUrl=url;
 						if(scraper!=null)
 							rUrl=scraper.scrape(ch, url, proc, f, this,true,null,
-												embedSub,stash);
+												embedSub,stash,null);
 						ChannelNaviXUpdate.updateMedia(ch,rName, rUrl, proc, f,thumb,imdb);
 					} catch (Exception e) {
 					}
@@ -150,7 +150,7 @@ public class ChannelPMSSaveFolder extends VirtualFolder {
 						String rUrl=url;
 						if(scraper!=null)
 							rUrl=scraper.scrape(ch, url, proc, f, this,false,null,
-												embedSub,stash);
+												embedSub,stash,null);
 						if(ChannelUtil.empty(rUrl))
 							return false;
 						Thread t=ChannelUtil.backgroundDownload(rName, rUrl, false);
@@ -209,24 +209,24 @@ public class ChannelPMSSaveFolder extends VirtualFolder {
 		if(save) {
 			cms=new ChannelMediaStream(ch,displayName(SNS),url,
 					   thumb,proc,f,asx,scraper,name,name);
-			cms.setEmbedSub(embedSub);
 			cms.setImdb(imdb);
 			cms.setRender(this.defaultRenderer);
 			cms.setSaveMode(rawSave);
 			cms.setFallbackFormat(videoFormat);
 			cms.setStreamVars(streamVars);
 			cms.setStash(stash);
+			cms.noSubs();
 			addChild(cms);
 		}
 		cms=new ChannelMediaStream(ch,displayName(PNS),url,thumb,
 				proc,f,asx,scraper,name,null);
-		cms.setEmbedSub(embedSub);
 		cms.setImdb(imdb);
 		cms.setRender(this.defaultRenderer);
 		cms.setSaveMode(rawSave);
 		cms.setFallbackFormat(videoFormat);
 		cms.setStreamVars(streamVars);
 		cms.setStash(stash);
+		cms.noSubs();
 		addChild(cms);
 	}
 
@@ -241,7 +241,7 @@ public class ChannelPMSSaveFolder extends VirtualFolder {
 	}
 	
 	public void childDone() {
-		childDone=System.currentTimeMillis();
+		//childDone=System.currentTimeMillis();
 	}
 	
 	public boolean preventAutoPlay() {

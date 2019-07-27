@@ -32,6 +32,7 @@ import java.util.zip.ZipInputStream;
 import org.apache.commons.io.FileUtils;
 import net.pms.PMS;
 import net.pms.configuration.PmsConfiguration;
+import net.pms.configuration.RendererConfiguration;
 import net.pms.dlna.DLNAResource;
 import net.pms.dlna.virtual.VirtualVideoAction;
 import net.pms.formats.Format;
@@ -152,22 +153,22 @@ public class ChannelUtil {
 		//	connection.setRequestProperty("Content-Length", "0"); 
 			connection.setDoInput(true);
 			connection.setDoOutput(true);
-		    BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-		    StringBuilder page=new StringBuilder();
-		    String str;
-		    while ((str = in.readLine()) != null) { 
-		    //	page.append("\n");
-		    	page.append(str.trim());
-		    	page.append("\n");
-		    }
-		    in.close();
+			BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+			StringBuilder page=new StringBuilder();
+			String str;
+			while ((str = in.readLine()) != null) {
+			//	page.append("\n");
+				page.append(str.trim());
+				page.append("\n");
+			}
+			in.close();
 			Channels.restoreProxyDNS();
-		    return page.toString();
+			return page.toString();
 		}
 		catch (Exception e) {
 			Channels.debug("fetch exception "+e.toString());
 			Channels.restoreProxyDNS();
-		    return "";
+			return "";
 		}
 	}
 	
@@ -188,9 +189,7 @@ public class ChannelUtil {
 	}
 	
 	public static boolean downloadText(InputStream in,File f) throws Exception {
-		PmsConfiguration configuration=PMS.getConfiguration();
-		//String subtitleQuality = config.getMencoderVobsubSubtitleQuality();
-		String subcp=configuration.getMencoderSubCp();
+		String subcp=getCodePage();
 		OutputStreamWriter out=new OutputStreamWriter(new FileOutputStream(f),subcp);
 		InputStreamReader inn=new InputStreamReader(in);
 		char[] buf=new char[4096];
@@ -274,54 +273,54 @@ public class ChannelUtil {
 	
 	public static ArrayList<String> gatherBlock(String[] lines,int start) {
 		ArrayList<String> res=new ArrayList<String>();
-    	int curls=1;
-    	for(int i=start;i<lines.length;i++) {
-    		String str=lines[i].trim();
-    		if(str.startsWith("}")) {
-    			res.add("}");
-    			curls--;
-    			if(curls==0)
-    				break;
-    			continue;
-    		}
-    		if(str.contains("{"))
-    			curls++;
-    		res.add(str+"\n");
-    	}
-    	return res; 
+		int curls=1;
+		for(int i=start;i<lines.length;i++) {
+			String str=lines[i].trim();
+			if(str.startsWith("}")) {
+				res.add("}");
+				curls--;
+				if(curls==0)
+					break;
+				continue;
+			}
+			if(str.contains("{"))
+				curls++;
+			res.add(str+"\n");
+		}
+		return res;
 	}
 	
 	public static ArrayList<String> gatherBlock(ArrayList<String> data,int start) {
 		ArrayList<String> res=new ArrayList<String>();
-    	int curls=1;
-    	for(int i=start;i<data.size();i++) {
-    		String str=data.get(i).trim();
-    		if(str.startsWith("}")) {
-    			res.add("}");
-    			curls--;
-    			if(curls==0)
-    				break;
-    			continue;
-    		}
-    		if(str.contains("{"))
-    			curls++;
-    		res.add(str+"\n");
-    	}
-    	return res; 
+		int curls=1;
+		for(int i=start;i<data.size();i++) {
+			String str=data.get(i).trim();
+			if(str.startsWith("}")) {
+				res.add("}");
+				curls--;
+				if(curls==0)
+					break;
+				continue;
+			}
+			if(str.contains("{"))
+				curls++;
+			res.add(str+"\n");
+		}
+		return res;
 	}
 	
 	public static String append(String res,String sep,String data) {
 		res=ChannelUtil.separatorToken(res);
 		data=ChannelUtil.separatorToken(data);
 		sep=ChannelUtil.separatorToken(sep);
-  	  	if(empty(res))
-  	  		return data;
-  	  	if(empty(data))
-  	  		return res;
-  	  	if(empty(sep))
-  	  		return res+data;
-  	  	return res+sep+data;
-    }
+		if(empty(res))
+			return data;
+		if(empty(data))
+			return res;
+		if(empty(sep))
+			return res+data;
+		return res+sep+data;
+	}
 	
 	public static ChannelMacro findMacro(ArrayList<ChannelMacro> macros,String macro) {
 		if(macros==null)
@@ -487,44 +486,54 @@ public class ChannelUtil {
 		}
 	}
 	
-	private static String addSubs(String rUrl,String sub,Channel ch) {
-		sub=ch.convSub(sub);
+	private static String addSubs(String rUrl,String sub,Channel ch,
+								  RendererConfiguration render) {
+		boolean braviaFix = false;
+		if(render != null)
+			braviaFix = render.isBRAVIA() && Channels.cfg().subBravia();
+		sub=ch.convSub(sub,braviaFix);
+		Channels.debug("sub fiel "+sub);
 		rUrl=append(rUrl,"&subs=",escape(sub));
 		//-spuaa 3 -subcp ISO-8859-10 -subfont C:\Windows\Fonts\Arial.ttf -subfont-text-scale 2 -subfont-outline 1 -subfont-blur 1 -subpos 90 -quiet -quiet -sid 100 -fps 25 -ofps 25 -sub C:\downloads\Kings Speech.srt -lavdopts fast -mc 0 -noskip -af lavcresample=48000 -srate 48000 -o \\.\pipe\mencoder1299956406082
 		PmsConfiguration configuration=PMS.getConfiguration();
 		//String subtitleQuality = config.getMencoderVobsubSubtitleQuality();
-		String subcp=configuration.getMencoderSubCp();
+		String subcp=getCodePage();
 		rUrl=append(rUrl,"&subcp=",escape(subcp));
 		rUrl=append(rUrl,"&subtext=",escape(configuration.getMencoderNoAssScale()));
 		rUrl=append(rUrl,"&subout=",escape(configuration.getMencoderNoAssOutline()));
 		rUrl=append(rUrl,"&subblur=",escape(configuration.getMencoderNoAssBlur()));
 		int subpos = 1;
-        try {
-        	subpos = Integer.parseInt(configuration.getMencoderNoAssSubPos());
-        } catch (NumberFormatException n) {
-        }
-        rUrl=append(rUrl,"&subpos=",String.valueOf(100 - subpos));
-        rUrl=append(rUrl,"&subtype=",ch.embSubExt());
-      //  rUrl=append(rUrl,"&subdelay=","20000");
-        return rUrl;
+		try {
+			subpos = Integer.parseInt(configuration.getMencoderNoAssSubPos());
+		} catch (NumberFormatException n) {
+		}
+		rUrl=append(rUrl,"&subpos=",String.valueOf(100 - subpos));
+		rUrl=append(rUrl,"&subtype=",ch.embSubExt());
+	  //  rUrl=append(rUrl,"&subdelay=","20000");
+		return rUrl;
 	}
 	
-	public static String createMediaUrl(String url,int format,Channel ch) {
+	public static String badResource() {
+		return "resource://"+ChannelResource.redXUrl();
+	}
+	
+	public static String createMediaUrl(String url,int format,Channel ch,
+			RendererConfiguration render) {
 		//Channels.debug("create media url entry(str only) "+url);
 		HashMap<String,String> map=new HashMap<String,String>();
 		map.put("url", url);
-		return createMediaUrl(map,format,ch);
+		return createMediaUrl(map,format,ch,render);
 	}
 	
-	public static String createMediaUrl(HashMap<String,String> vars,int format,Channel ch) {
+	public static String createMediaUrl(HashMap<String,String> vars,int format,
+										Channel ch,RendererConfiguration render) {
+		if(!empty(vars.get("bad"))) {
+			// bad link, return error url
+			return badResource();
+		}
 		String rUrl=vars.get("url");
 		if(empty(rUrl)||Channels.noPlay()) // what do we do?
 			return null;
-		Channels.debug("bad "+vars.get("bad"));
-		if(!empty(vars.get("bad"))) {
-			// bad link, return error url
-			return "resource://videos/button_cancel-512.mpg";
-		}
 		rUrl=rUrl.replace("HTTP://", "http://"); // ffmpeg has problems with ucase HTTP
 		int rtmpMet=Channels.rtmpMethod();
 		String type=vars.get("__type__");			
@@ -545,7 +554,7 @@ public class ChannelUtil {
 			if(!empty(sub)) { // we got subtitles
 				rUrl="subs://"+rUrl;
 				// lot of things to append here
-				rUrl=addSubs(rUrl,sub,ch);
+				rUrl=addSubs(rUrl,sub,ch,render);
 			}
 			else
 				if(!empty(type)&&type.equals("navix"))
@@ -575,7 +584,7 @@ public class ChannelUtil {
 			String sub=vars.get("subtitle");
 			if(!empty(sub)) { // we got subtitles
 				// lot of things to append here
-				rUrl=addSubs(rUrl,sub,ch);
+				rUrl=addSubs(rUrl,sub,ch,render);
 			}
 			Channels.debug("return media url rtmpdump spec "+rUrl);
 			return rUrl;
@@ -620,7 +629,7 @@ public class ChannelUtil {
 				String sub=vars.get("subtitle");
 				if(!empty(sub)) { // we got subtitles
 					// lot of things to append here
-					rUrl=addSubs(rUrl,sub,ch);
+					rUrl=addSubs(rUrl,sub,ch,render);
 				}
 				break;
 				
@@ -649,24 +658,31 @@ public class ChannelUtil {
 			
 	}
 	
+	private static boolean backTrackCompensate(DLNAResource start) {
+		// if we are in a subslector skip that
+		if(start instanceof ChannelPMSSubSelector) 
+			return true;
+		// Sub sites should be skipped to
+		if(start instanceof ChannelPMSSubSiteSelector)
+			return true;
+		return false;
+	}
+	
 	public static String backTrack(DLNAResource start,int stop) {
 		if(start==null)
 			return null;
-		if(Channels.save()) { // compensate for save
-			if(start.getParent()!=null)
-				start=start.getParent();
-		}
-		if(start==null) 
-		if(stop==0)
-			return start.getName();
 		int i=0;
 		DLNAResource curr=start;
+		if(Channels.save())
+			curr=start.getParent();
+		while(backTrackCompensate(curr)) // inital compensation
+			curr=curr.getParent();
+		if(stop==0)
+			return curr.getName();
 		while(i<stop) {
 			curr=curr.getParent();
-			if(curr instanceof ChannelPMSSubSiteSelector) {
-				// compensate
-				continue;
-			}
+			if(backTrackCompensate(curr))
+				continue; // don't count these
 			i++;
 			if(curr instanceof Channel) {
 				curr=null;
@@ -760,17 +776,17 @@ public class ChannelUtil {
 			pb.redirectErrorStream(true);
 			Process pid=pb.start();
 			InputStream is = pid.getInputStream();
-	        InputStreamReader isr = new InputStreamReader(is);
-	        BufferedReader br = new BufferedReader(isr);
-	        String line;
-	        StringBuilder sb=new StringBuilder();
-	        while ((line = br.readLine()) != null) { 
-	        	sb.append(line);
-	        	if(verbose)
-	        		Channels.debug("execute read line "+line);
-	        }
-	        pid.waitFor();
-	        return sb.toString();
+			InputStreamReader isr = new InputStreamReader(is);
+			BufferedReader br = new BufferedReader(isr);
+			String line;
+			StringBuilder sb=new StringBuilder();
+			while ((line = br.readLine()) != null) {
+				sb.append(line);
+				if(verbose)
+					Channels.debug("execute read line "+line);
+			}
+			pid.waitFor();
+			return sb.toString();
 		}
 		catch (Exception e) {
 			Channels.debug("executing external script failed "+e);
@@ -1251,6 +1267,13 @@ public class ChannelUtil {
 		catch (Exception e) {
 		}
 		return def;
+	}
+
+	public static String getCodePage() {
+		String cp = PMS.getConfiguration().getSubtitlesCodepage();
+		if(empty(cp))
+			return "utf-8";
+		return cp;
 	}
 	
 }

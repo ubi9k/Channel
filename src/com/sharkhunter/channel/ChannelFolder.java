@@ -499,7 +499,7 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 		}
 		if(filter==null&&matcher==null&&type==ChannelFolder.TYPE_NORMAL) { // static folder
 			// static folders are not subject to filter
-			parent.debug("static folder");
+			parent.debug("static folder "+type);
 			ChannelPMSFolder cpf=new ChannelPMSFolder(this,name);
 			cpf.setImdb(ChannelUtil.empty(imdb)?imdbId:imdb);
 			res.addChild(cpf);
@@ -544,7 +544,7 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 		realUrl=ChannelScriptMgr.runScript(pre_script, realUrl, parent);
 		if(!ChannelUtil.empty(realUrl)&&!dummy) {
 			URL urlobj=new URL(realUrl.replaceAll(" ", "%20"));
-			parent.debug("folder match url "+urlobj.toString()+" type "+type+" post "+post+" "+urlEnd);
+			parent.debug("folder match url "+urlobj.toString()+" type "+type+" post "+post+" "+urlEnd+" emb "+embSubs);
 			try {
 				ChannelAuth a=parent.prepareCom();
 				if(!ChannelUtil.empty(proxy))  {// override channel proxy
@@ -650,7 +650,7 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 	    	}
 	    	// we could match the video format here
 	    	m.startMatch(page);
-	    	parent.debug("media matching using "+m.getRegexp().pattern());
+	    	parent.debug("media matching using "+m.getRegexp().pattern()+" emb sub "+embSubs);
 	    	while(m.match()) {
 	    		Channels.debug("allplay "+allPlay+" cfg "+Channels.cfg().allPlay());
 	    		if(allPlay==null&&Channels.cfg().allPlay()) {
@@ -836,6 +836,8 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 	    		String group=m.getMatch("group",false);
 	    		String imdbId=m.getMatch("imdb",false);
 	    		String subs=m.getMatch("subs",false);
+	    		if(ChannelUtil.empty(subs))
+	    			subs=embSubs;
 	    		if(ChannelUtil.empty(imdbId)) {
 	    			imdbId=imdb;
 	    			if(ChannelUtil.empty(thumb))
@@ -859,6 +861,10 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 	    			else
 	    				someName=cf.name;
 	    			someName=m.pend(someName, "name");
+	    		}
+	    		if(ChannelUtil.getProperty(cf.prop, "bad")) {
+	    			res.addChild(ChannelResource.redX(someName));
+	    			return;
 	    		}
 	    		if(Channels.isIllegal(someName, ChannelIllegal.TYPE_NAME))
 	 	    		   continue;
@@ -919,6 +925,7 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 	    			Channels.debug("add "+someName+" furl "+fUrl);
 	    			ChannelPMSFolder cpf=new ChannelPMSFolder(cf,someName,null,fUrl,thumb);
 	    			cpf.setImdb(imdbId);
+	    			cpf.setEmbSubs(subs);
 	    			res.addChild(cpf);
 	    		}
 	    		if(cf.onlyFirst())
@@ -930,9 +937,13 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 	    	allSave=findAllPlay(res,"SAVE&PLAY");
 	    	// Remove them
 	    	if(allPlay!=null) {
+	    		ChannelPMSAllPlay a=(ChannelPMSAllPlay)allPlay;
+	    		a.clearID();
 	    		res.getChildren().remove(allPlay);
 	    	}
 	    	if(allSave!=null) {
+	    		ChannelPMSAllPlay a=(ChannelPMSAllPlay)allSave;
+	    		a.clearID();
 	    		res.getChildren().remove(allSave);
 	    	}
 	    	// If we got more than one left...
@@ -1251,11 +1262,11 @@ public class ChannelFolder implements ChannelProps, SearchObj{
 		return c.after(d);
 	}
 	
-	private DLNAResource findAllPlay(DLNAResource res,String name) {
+	private ChannelPMSAllPlay findAllPlay(DLNAResource res,String name) {
 		for(DLNAResource tmp : res.getChildren()) {
 			if(tmp instanceof ChannelPMSAllPlay) {
 				if(tmp.getName().startsWith(name))
-					return tmp;
+					return (ChannelPMSAllPlay) tmp;
 			}				
 		}
 		return null;

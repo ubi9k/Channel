@@ -14,6 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import net.pms.PMS;
+import net.pms.configuration.RendererConfiguration;
 import net.pms.dlna.DLNAResource;
 
 
@@ -145,13 +146,16 @@ public class ChannelNaviXProc {
 		boolean if_skip=false;
 		boolean if_true=false;
 		int maxV=0;
-		debug("parse v2 ");
 		vars.put("s_url", url);
 		for(int i=start;i<lines.length;i++) {
 			String line=lines[i];
 			if(ChannelUtil.ignoreLine(line))
 				continue;
 			line=line.trim();
+			if(line.startsWith("nodebug=\'")) {
+				// take this first to disable debugging early
+				vars.put("nodebug", line.substring(9));
+			}
 			debug("navix proc line "+line);
 			if(if_true)
 				if(line.startsWith("else")||line.startsWith("elseif")) {
@@ -582,19 +586,21 @@ public class ChannelNaviXProc {
 	}
 	
 	public static String parse(String url,String pUrl,int format) {
-		return parse(url,pUrl,format,null,null,null,null);
+		return parse(url,pUrl,format,null,null,null,null,null);
 	}
 	
 	public static String parse(String url,String pUrl,int format,String subFile,Channel ch) {
-		return parse(url,pUrl,format,null,null,subFile,ch);
+		return parse(url,pUrl,format,null,null,subFile,ch,null);
 	}
 	
-	public static String parse(String url,String pUrl,int format,ChannelNaviX caller,DLNAResource start) {
-		return parse(url,pUrl,format,caller,start,null,null);
+	public static String parse(String url,String pUrl,int format,ChannelNaviX caller,
+							   DLNAResource start,RendererConfiguration render) {
+		return parse(url,pUrl,format,caller,start,null,null,render);
 	}
 
 	public static String parse(String url,String pUrl,int format,ChannelNaviX caller,
-							   DLNAResource start,String subFile,Channel ch) {
+							   DLNAResource start,String subFile,Channel ch,
+							   RendererConfiguration render) {
 		vars.clear();
 		rvars.clear();
 		vars.put("subtitle",subFile);
@@ -607,7 +613,7 @@ public class ChannelNaviXProc {
 				vars.put("s_cookie", auth.authStr);
 		}
 		if(pUrl==null) // no processor, just return what we got
-			return ChannelUtil.createMediaUrl(vars,format,ch);
+			return ChannelUtil.createMediaUrl(vars,format,ch,render);
 		URL pu=null;
 		try {
 			pu = new URL(pUrl+"?url="+url);
@@ -701,7 +707,7 @@ public class ChannelNaviXProc {
 		vars.put("url", rUrl);
 		vars.put("__type__", "navix");
 		Channels.debug("type "+vars.get("__type__"));
-		rUrl=ChannelUtil.createMediaUrl(vars,format,ch);
+		rUrl=ChannelUtil.createMediaUrl(vars,format,ch,render);
 		Channels.debug("navix return media url "+rUrl);
 		return rUrl;
 	}
@@ -766,13 +772,13 @@ public class ChannelNaviXProc {
 			ChannelAuth a=null;
 			if(ch!=null) { 
 				a=ch.prepareCom();
-				Channels.debug("a "+a+" cookie "+a.authStr);
+				debug("a "+a+" cookie "+a.authStr);
 				if(a!=null&&a.method==ChannelLogin.COOKIE)
 					vars.put("s_cookie", a.authStr);
-				Channels.debug("cookie "+vars.get("s_cookie"));
+				debug("cookie "+vars.get("s_cookie"));
 			}
 			if(parseV2(lines,0,url,a))
-				Channels.debug("found report statement in NIPL lite script. Hopefully script worked anyway.");
+				debug("found report statement in NIPL lite script. Hopefully script worked anyway.");
 			String rUrl=ChannelUtil.parseASX(vars.get("url"),asx);
 			vars.put("url", rUrl);
 			HashMap<String,String> res=new HashMap<String, String>(vars);
@@ -806,6 +812,8 @@ public class ChannelNaviXProc {
 		if(script==null)
 			return str;
 		HashMap<String,String> res=lite(str,script,initStash,ch);
+        if(res == null)
+            return null;
 		return res.get("url");
 	}
 }

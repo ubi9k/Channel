@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.configuration.ConfigurationException;
 
+import com.sun.jna.Platform;
+
 import net.pms.PMS;
 
 public class ChannelCfg {
@@ -59,6 +61,10 @@ public class ChannelCfg {
 	private boolean monitor;
 	private boolean pmsenc;
 	private boolean streamVar;
+	private String nullUrl;
+	private String badUrl;
+	private boolean subBravia;
+	private boolean clearCookies;
 	
 	public ChannelCfg(Channels top) {
 		chPath=null;
@@ -93,6 +99,10 @@ public class ChannelCfg {
 		monitor=true;
 		pmsenc=false;
 		streamVar=false;
+		nullUrl=null;
+		badUrl=null;
+		subBravia=true;
+		clearCookies=false;
 	}
 	
 	///////////////////////////////////
@@ -339,6 +349,22 @@ public class ChannelCfg {
 		return streamVar;
 	}
 	
+	public String nullURL() {
+		return nullUrl;
+	}
+	
+	public String badURL() {
+		return badUrl;
+	}
+	
+	public boolean subBravia() {
+		return subBravia;
+	}
+	
+	public boolean clearCookies() {
+		return clearCookies;
+	}
+	
 	////////////////////////////////////////
 	// Misc. methods
 	////////////////////////////////////////
@@ -391,6 +417,10 @@ public class ChannelCfg {
 		String mo=(String)PMS.getConfiguration().getCustomProperty("channels.monitor");
 		String penc=(String)PMS.getConfiguration().getCustomProperty("channels.pmsencoder");
 		String sv=(String)PMS.getConfiguration().getCustomProperty("channels.stream_var");
+		String nu=(String)PMS.getConfiguration().getCustomProperty("channels.null_url");
+		String bu=(String)PMS.getConfiguration().getCustomProperty("channels.bad_url");
+		String bs=(String)PMS.getConfiguration().getCustomProperty("channels.bravia_sub");
+		String cc=(String)PMS.getConfiguration().getCustomProperty("channels.clear_cookies");
 		
 		if(!ChannelUtil.empty(cf))
 			crawlFormat=cf;
@@ -499,6 +529,14 @@ public class ChannelCfg {
 			pmsenc=true;
 		if(!ChannelUtil.empty(sv)&&sv.equalsIgnoreCase("true"))
 			streamVar=true;
+		if(!ChannelUtil.empty(nu))
+			nullUrl=nu;
+		if(!ChannelUtil.empty(bu))
+			badUrl=bu;
+		if(!ChannelUtil.empty(bs)&&bs.equalsIgnoreCase("false"))
+			subBravia=false;
+		if(!ChannelUtil.empty(cc)&&cc.equalsIgnoreCase("true"))
+			clearCookies=true;
 	}
 
 	private void configPath(String key,String val) {
@@ -579,9 +617,10 @@ public class ChannelCfg {
 	
 	private static final String chList="https://github.com/SharkHunter/Channel/tree/master/channels";
 	private static final String scList="https://github.com/SharkHunter/Channel/tree/master/scripts";
-	private static final String chReg="<td class=\"content\"><a href=\"[^\"]+\" [^>]+>([^<]+)</a></td>";
+	private static final String chReg="<td class=\"content\">\\s*.*?<a href=\"[^\"]+\" [^>]+>([^<]+)</a>";
 	private static final String rawChBase="https://github.com/SharkHunter/Channel/raw/master/channels/";
 	private static final String rawScBase="https://github.com/SharkHunter/Channel/raw/master/scripts/";
+	private static final String pywin="http://sharkhunter-shb.googlecode.com/files/pywin.zip"; 
 	
 	private void fetchFromGit(String list,String raw,String path) throws Exception {
 		URL u=new URL(list);
@@ -611,6 +650,20 @@ public class ChannelCfg {
             in.close();
 		}
       } 
+	
+	private void fetchPyWinOverlay() throws ConfigurationException {
+		String tmp = (String) PMS.getConfiguration().getCustomProperty("python.pywin_extra");
+		if(ChannelUtil.empty(tmp)||!tmp.equalsIgnoreCase("true")) {
+			if(Platform.isWindows()) {
+				File f=new File("extra"+File.separator+"pywin.zip");
+				ChannelUtil.downloadBin(pywin, f);
+				CH_plugin.unzip("extras\\Python27\\Lib\\site-packages", f);
+				f.delete();
+				PMS.getConfiguration().setCustomProperty("python.pywin_extra","true");
+				PMS.getConfiguration().save();
+			}
+		}
+	}
 
 	public void fetchChannels() {
 		try {			
@@ -619,6 +672,8 @@ public class ChannelCfg {
 			fetchFromGit(chList,rawChBase,chPath);
 			// and then the scripts
 			fetchFromGit(scList,rawScBase,scriptPath);
+			// Fetch th pywin overlay (if needed)
+			fetchPyWinOverlay();
 		}
 		catch(Exception e) {
 			Channels.debug("error fetching channels "+e);

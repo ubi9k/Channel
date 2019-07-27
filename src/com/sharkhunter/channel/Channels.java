@@ -34,14 +34,13 @@ import net.pms.dlna.DLNAResource;
 import net.pms.dlna.PlaylistFolder;
 import net.pms.dlna.virtual.VirtualFolder;
 import net.pms.dlna.virtual.VirtualVideoAction;
-import net.pms.util.FileUtil;
 import no.geosoft.cc.io.FileListener;
 import no.geosoft.cc.io.FileMonitor;
 
 public class Channels extends VirtualFolder implements FileListener {
 
 	// Version string
-	public static final String VERSION="2.14";
+	public static final String VERSION="2.25";
 	public static final String ZIP_VER="211";
 	
 	// Constants for RTMP string constructions
@@ -787,8 +786,15 @@ public class Channels extends VirtualFolder implements FileListener {
 			handleCred(f);
 
 		}
-		if(readCookieFile(cfg.getCookiePath())) // only need to write back if we removed some
+		if(cfg.clearCookies()) {
+			// delete cookie file and creat an empty placeholder
+			new File(cfg.getCookiePath()).delete();
 			writeCookieFile(cfg.getCookiePath());
+		}
+		else {
+			if(readCookieFile(cfg.getCookiePath())) // only need to write back if we removed some
+				writeCookieFile(cfg.getCookiePath());
+		}
 	}
 	
 	//////////////////////////////////////////
@@ -846,7 +852,9 @@ public class Channels extends VirtualFolder implements FileListener {
 	private static void writeCookieFile(String file) {
 		try {
 			FileOutputStream out=new FileOutputStream(file);
-			String data="# Cookie file\n"; // write a dummy line to make sure the file exists
+			// write a dummy line to make sure the file exists
+			Date now=new Date();
+			String data="# Cookie file generated "+ now.toString() +"\n"; 
 			out.write(data.getBytes(), 0, data.length());
 			for(String key : inst.cookies.keySet()) {
 				ArrayList<ChannelAuth> list= inst.cookies.get(key);
@@ -1285,6 +1293,7 @@ public class Channels extends VirtualFolder implements FileListener {
 			StringBuilder sb=null;
 			String templ=null;
 			String search=null;
+			boolean try_search = false;
 			while ((str = in.readLine()) != null) {
 				if(ChannelUtil.empty(str))
 					continue;
@@ -1308,6 +1317,7 @@ public class Channels extends VirtualFolder implements FileListener {
 								ChannelMonitor m=new ChannelMonitor(mf,entries,name);
 								m.setTemplate(templ);
 								m.setSearch(search);
+								m.setTrySearch(try_search);
 								monMgr.add(m);
 								// Clear all vars
 								name=null;
@@ -1315,6 +1325,7 @@ public class Channels extends VirtualFolder implements FileListener {
 								entries=null;
 								owner=null;
 								search=null;
+								try_search = false;
 							}
 						}
 					}
@@ -1344,6 +1355,10 @@ public class Channels extends VirtualFolder implements FileListener {
 				}
 				if(str.startsWith("monitor")) {
 					sb=new StringBuilder();
+					continue;
+				}
+				if(str.startsWith("try_search=")) {
+					try_search = str.substring(11).equalsIgnoreCase("true");
 					continue;
 				}
 				if(str.startsWith("name=")) {
@@ -1401,6 +1416,7 @@ public class Channels extends VirtualFolder implements FileListener {
 		String nameProp=cf.getProp("monitor_name");
 		String washedName=monNameWash(res.getName(),templ,searched,nameProp);
 		StringBuffer sb=new StringBuffer();
+		boolean try_search = cf.getProperty("monitor_try_search");
 		if(newFile) {
 			sb.append("######\n");
 			sb.append("## NOTE!!!!!\n");
@@ -1415,6 +1431,8 @@ public class Channels extends VirtualFolder implements FileListener {
 			ChannelUtil.appendVarLine(sb, "templ", templ);
 		if(!ChannelUtil.empty(searched))
 			ChannelUtil.appendVarLine(sb, "search", searched);
+		if(try_search)
+			ChannelUtil.appendVarLine(sb, "try_search", "true");
 		ArrayList<String> entries=new ArrayList<String>();
 		for(DLNAResource r : res.getChildren()) {
 			if(ChannelUtil.filterInternals(r))
@@ -1432,6 +1450,7 @@ public class Channels extends VirtualFolder implements FileListener {
     		String str=lines[i].trim();
     	    if(str.startsWith("monitor")||
     	       str.startsWith("owner")||
+			   str.startsWith("try_search") ||
     	       str.startsWith("templ")) {
     	    	// skip the start lines
     	    	continue;
@@ -1445,6 +1464,7 @@ public class Channels extends VirtualFolder implements FileListener {
     			ChannelMonitor m=new ChannelMonitor(mf,entries,washedName);
     			m.setTemplate(templ);
     			m.setSearch(searched);
+				m.setTrySearch(try_search);
     			inst.monMgr.add(m);
     			continue;
     	    }
@@ -1530,5 +1550,18 @@ public class Channels extends VirtualFolder implements FileListener {
 				return true;
 			}
     	});
+	}
+	
+	///////////////////////////////////////////////////////
+	// URL Resolving
+	///////////////////////////////////////////////////////
+	
+	public String urlResolve(String url,boolean dummyOnly) {
+		for(Channel ch : getChannels()) {
+			String u = ch.urlResolve(url,dummyOnly);
+			if(!ChannelUtil.empty(u))
+				return u;
+		}
+		return null;
 	}
 }

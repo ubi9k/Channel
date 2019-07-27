@@ -1,4 +1,4 @@
-version = 0.40
+version = 0.52
 
 macrodef apiMedia {
 	media {
@@ -10,18 +10,8 @@ macrodef apiMedia {
 	}
 }
 
-macrodef ytMedia {
-	media {
-		#<a href="/watch?v=8hMsNRMIHZQ&amp;feature=tn" title="Shay Given&#39;s tears over Gary Speed&#39;s death." class="yt-uix-tile-link"  >Shay Given&#39;s tears over Gary Speed&#39;s death.</a>
-		matcher = <a href=\"([^\"]+)\" title=\"([^\"]+)\"
-		order = url,name
-		escript=youtube-dl.bat
-		prop = prepend_url=http://www.youtube.com,prepend_thumb=http:,no_format,url_unescape
-	}
-}
-
 channel YouTube {
-	img = http://www.engr.uky.edu/solarcar/sites/default/files/YouTube_icon.png
+	img=http://www.youtube.com/yt/brand/media/image/yt-brand-standard-logo-630px.png
 	fallback_video=.mp4
 	login {
 		url=https://www.google.com/youtube/accounts/ClientLogin
@@ -30,6 +20,19 @@ channel YouTube {
 		params=service=youtube&source=pms-ch-plug
 		matcher=Auth=(.*)
 		authstr=GoogleLogin auth=
+	}
+	resolve {
+		matcher=(.*youtube\.com/.*)
+		action=resolved
+	}
+	folder {
+		type=action
+		action_name=resolved
+		url=dummy_url
+		media {
+			escript=youtube-dl.bat
+			prop=ignore_save
+		}
 	}
 	folder {
 		name=MyTube
@@ -59,24 +62,6 @@ channel YouTube {
 					macro=apiMedia
 				}
 			}
-		}
-	}
-	folder {
-		name=Categories
-		url=http://www.youtube.com/videos?feature=mh
-		folder {
-			# <li><a href="/news" >Nyheter och politik</a>
-			matcher = <li[^>]*>\s+<a href=\"([^\"]+)\"\s*>([^<]+)</a>[^<]*</li>
-            order = url,name
-            url = http://www.youtube.com/
-			macro=ytMedia
-		}
-		folder {
-			#<a class="" href="/autos">Bilar och fordon</a>
-			matcher=<a class=\"\" href=\"([^\"]+)\">([^<]+)<
-			order=url,name
-			url=http://www.youtube.com/
-			macro=ytMedia
 		}
 	}
 	folder {

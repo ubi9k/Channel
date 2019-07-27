@@ -10,6 +10,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import net.pms.PMS;
+import net.pms.configuration.RendererConfiguration;
 import net.pms.dlna.DLNAResource;
 import net.pms.dlna.Feed;
 import net.pms.dlna.virtual.VirtualFolder;
@@ -270,9 +271,13 @@ public class ChannelNaviX extends VirtualFolder implements ChannelScraper {
 
 	@Override
 	public String scrape(Channel ch, String url, String processorUrl,int format,DLNAResource start
-			             ,boolean noSub,String imdb,Object embedSub,HashMap<String,String> extraMap) {
+			             ,boolean noSub,String imdb,Object embedSub,
+			             HashMap<String,String> extraMap,RendererConfiguration render) {
 		imdbId=imdb;
-		return ChannelNaviXProc.parse(url,processorUrl,format,(noSub?null:this),start);
+		String res=ChannelNaviXProc.parse(url,processorUrl,format,(noSub?null:this),start,render);
+		if(ChannelUtil.empty(res))
+			return ChannelUtil.badResource();
+		return res;
 	}
 	
 	public Channel getChannel() {
@@ -365,6 +370,19 @@ public class ChannelNaviX extends VirtualFolder implements ChannelScraper {
 	
 	public HashMap<String,Object> subSelect(DLNAResource start,String imdb,String subSite) {
 		return ChannelSubUtil.subSelect(start, imdb, subSite, subtitle, parent);
+	}
+
+	@Override
+	public boolean getBoolProp(String p) {
+		if(p.equals("do_resolve"))
+			return true;
+		return ChannelUtil.getProperty(props, p);
+	}
+
+	@Override
+	public String lastPlayResolveURL(DLNAResource start) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 	
 }

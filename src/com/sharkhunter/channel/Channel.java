@@ -1,9 +1,13 @@
 package com.sharkhunter.channel;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
 import java.net.Proxy;
@@ -11,6 +15,7 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.apache.commons.io.FileUtils;
 
@@ -59,6 +64,8 @@ public class Channel extends VirtualFolder {
 	private ChannelMatcher subConv;
 	private boolean subConvTimeMs;
 	
+	private ArrayList<ChannelSwitch> urlResolve;
+	
 	public Channel(String name) {
 		super(name,null);
 		Ok=false;
@@ -79,6 +86,7 @@ public class Channel extends VirtualFolder {
 		embedSubType=SubtitleType.SUBRIP;
 		subConv=null;
 		subConvTimeMs=false;
+		urlResolve=new ArrayList<ChannelSwitch>();
 		Ok=true;
 	}
 	
@@ -114,6 +122,13 @@ public class Channel extends VirtualFolder {
 				ArrayList<String> sc=ChannelUtil.gatherBlock(data,i+1);
 				i+=sc.size();
 				parseSubConv(sc);
+			}
+			if(line.contains("resolve {")) {
+				ArrayList<String> ur=ChannelUtil.gatherBlock(data,i+1);
+				i+=ur.size();
+				ChannelSwitch s=new ChannelSwitch(ur,this);
+				if(s.Ok)
+					urlResolve.add(s);
 			}
 			String[] keyval=line.split("\\s*=\\s*",2);
 			if(keyval.length<2)
@@ -258,6 +273,8 @@ public class Channel extends VirtualFolder {
 			}
 		for(int i=0;i<folders.size();i++) {
 			ChannelFolder cf=folders.get(i);
+			if(cf.isActionOnly())
+				continue;
 			if(cf.isATZ()) 
 				addChild(new ChannelATZ(cf));
 			else if(cf.isSearch())
@@ -344,7 +361,7 @@ public class Channel extends VirtualFolder {
 	}
 	
 	public void addSearcher(String id,SearchObj obj) {
-		searchFolders.put(id,obj);
+		searchFolders.put(id, obj);
 	}
 	
 	public void research(String str,String id,DLNAResource res) {
@@ -366,6 +383,13 @@ public class Channel extends VirtualFolder {
 		if(obj==null)
 			return;
 		obj.search(str, res);
+	}	
+	public void searchAll(String str, DLNAResource res) {
+		for(String id : searchFolders.keySet()) {
+			SearchObj sobj = searchFolders.get(id);
+			if(sobj!=null)
+				sobj.search(str,res);
+		}
 	}
 	
 	public HashMap<String,String> getSubMap(String realName,int id) {
@@ -401,7 +425,7 @@ public class Channel extends VirtualFolder {
 		actions.add(cf);
 	}
 	
-	public void action(ChannelSwitch swi,String name,String url,String thumb,DLNAResource res,int form) {
+	public ChannelFolder action(ChannelSwitch swi,String name,String url,String thumb,DLNAResource res,int form) {
 		String action=swi.getAction();
 		String rUrl=swi.runScript(url);
 		int f=form;
@@ -414,10 +438,12 @@ public class Channel extends VirtualFolder {
 				continue;
 			try {
 				cf.action(res,null,rUrl,thumb,name,null,f);
+				return cf;
 			} catch (MalformedURLException e) {
 			}
-			return;
+			return null;
 		}
+		return null;
 	}
 	
 	public ChannelFolder getAction(String action) {
@@ -499,23 +525,27 @@ public class Channel extends VirtualFolder {
 		return embedSubType;
 	}
 	
-	public String convSub(String subFile) {
-		if(subConv==null)
+	public String convSub(String subFile,boolean braviaFix) {
+		if(subConv==null) {
+			if(braviaFix)
+				return braviafySubs(subFile);
 			return subFile;
+		}
 		try {
-			return convSub_i(subFile);
+			return convSub_i(subFile,braviaFix);
 		} catch (IOException e) {
 			return subFile;
 		}
 	}
 	
-	private String convSub_i(String subFile) throws IOException {
+	private String convSub_i(String subFile,boolean braviaFix) throws IOException {
 		File src=new File(subFile);
-		File dst=new File(Channels.dataEntry(src.getName()+".srt"));
+		String oFile=Channels.dataEntry(src.getName()+".srt"+(braviaFix?".bravia":""));
+		File dst=new File(oFile);
 		if(dst.exists())
 			return dst.getAbsolutePath();
 		int index=1;
-		String fe=PMS.getConfiguration().getMencoderSubCp();
+		String fe=ChannelUtil.getCodePage();
 		String data=FileUtils.readFileToString(src,fe);
 		OutputStreamWriter out=new OutputStreamWriter(new FileOutputStream(dst),fe);
 		subConv.startMatch(data);
@@ -525,6 +555,12 @@ public class Channel extends VirtualFolder {
 			String text=subConv.getMatch("text");
 			if(ChannelUtil.empty(start)||ChannelUtil.empty(stop)||ChannelUtil.empty(text))
 				continue;
+			if(braviaFix) {
+				// real odd ball trick
+				// we add a line to the end of each text to pull up the 
+				// text (and only on  BRAVIA)
+				text=ChannelUtil.append(text, "\n", DOTS+"\n");
+			}
 			ChannelSubUtil.writeSRT(out, index++, start, stop, text, subConvTimeMs);
 		}
 		out.flush();
@@ -579,5 +615,73 @@ public class Channel extends VirtualFolder {
 				subConv.setChannel(this);
 			}
 		}
+	}
+	
+	private static final String DOTS = "..."; 
+	
+	private String braviafySubs(String subFile) {
+		try {
+			File outFile=new File(subFile+".bravia");
+			if(outFile.exists())
+				return outFile.getAbsolutePath();
+			String cp=ChannelUtil.getCodePage();
+			BufferedReader in=new BufferedReader(new InputStreamReader(
+												 new FileInputStream(subFile),cp));	
+			String str;
+			StringBuffer sb=new StringBuffer();
+			while ((str = in.readLine()) != null) {
+				if(ChannelUtil.empty(str)) {
+					sb.append(DOTS+"\n\n");
+					continue;
+				}
+				sb.append(str);
+				sb.append("\n");
+			}
+			in.close();
+			FileUtils.writeStringToFile(outFile, sb.toString(),cp);
+			return outFile.getAbsolutePath();
+		} catch (Exception e) {
+			Channels.debug("braviafy error "+e);
+		}
+    	return subFile;
+	}
+	
+	/////////////////////////////////////////////////////////
+	
+	private String resolved(DLNAResource r) {
+		ChannelMediaStream cms=(ChannelMediaStream)r;
+		cms.scrape(null);
+		return cms.urlResolve();
+	}
+	
+	public String urlResolve(String url,boolean dummyOnly) {
+		for(ChannelSwitch resolver : urlResolve) {
+			boolean dummy_match=ChannelUtil.getProperty(resolver.getProps(), "dummy_match");
+			if(!dummyOnly&&dummy_match)
+				continue;
+			ChannelMatcher m=resolver.matcher;
+			m.startMatch(url);
+			if(m.match()) {
+				String url1=m.getMatch("url",true);
+				VirtualFolder dummy=new VirtualFolder("",null);
+				ChannelFolder af=action(resolver,"",url1,null,dummy,-1);
+				Channels.debug("urlResolve on channel "+getName()+" for url "+url);
+				String mstr ="";
+				if(af!=null)
+					mstr=af.getProp("crawl_mode");
+				// first lets crawl
+				ChannelCrawl crawler=new ChannelCrawl();
+				DLNAResource res =crawler.startCrawl(dummy, mstr);
+				if(res!=null && (res instanceof ChannelMediaStream))
+					return resolved(res);
+				// pick the first
+				for(DLNAResource r : dummy.getChildren()) {
+					if(!(r instanceof ChannelMediaStream))
+						continue;
+					return resolved(r);
+				}
+			}
+		}
+		return null;
 	}
 }

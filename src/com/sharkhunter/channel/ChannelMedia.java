@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringEscapeUtils;
 import net.pms.PMS;
+import net.pms.configuration.RendererConfiguration;
 import net.pms.dlna.DLNAResource;
 import net.pms.dlna.virtual.VirtualVideoAction;
 import net.pms.formats.Format;
@@ -228,6 +229,20 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 		if(type==ChannelMedia.TYPE_ASX)
 			asx=ChannelUtil.ASXTYPE_FORCE;
 		final int resF=(format==-1?(f==-1?parent.getMediaFormat():f):format);
+		if(ChannelUtil.getProperty(prop, "bad")) {
+			res.addChild(ChannelResource.redX(nName));
+			return;
+		}
+		if(ChannelUtil.getProperty(prop, "ignore_save")) {
+			ChannelMediaStream cms=new ChannelMediaStream(parent,nName,url,thumb,script,resF,asx,this);
+			cms.setImdb(imdb);
+			cms.setSaveMode(ChannelUtil.getProperty(prop, "raw_save"));
+			cms.setFallbackFormat(videoFormat);
+			cms.setEmbedSub(subs);
+			cms.setStash(rtmpStash);
+			res.addChild(cms);
+			return;
+		}
 		if((Channels.save()&&sOpt==ChannelMedia.SAVE_OPT_NONE)||
 			(subtitle!=null||!ChannelUtil.empty(subs))) { // Add save version
 			ChannelPMSSaveFolder sf=new ChannelPMSSaveFolder(parent,nName,url,thumb,script,asx,
@@ -263,7 +278,8 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 	
 	@Override
 	public String scrape(Channel ch, String url, String scriptName,int format,DLNAResource start
-			             ,boolean noSub,String imdb,Object embedSubs,HashMap<String,String> extraMap) {
+			             ,boolean noSub,String imdb,Object embedSubs,
+			             HashMap<String,String> extraMap,RendererConfiguration render) {
 		ch.debug("scrape sub "+subtitle+" format "+format);
 		String subFile="";
 		boolean live=ChannelUtil.getProperty(prop, "live");
@@ -295,7 +311,7 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 				vars.putAll(extraMap);
 			if(live)
 				vars.put("live", "true");	
-			return ChannelUtil.createMediaUrl(vars,format,ch);
+			return ChannelUtil.createMediaUrl(vars,format,ch,render);
 		}
 		ch.debug("media scrape type "+scriptType+" name "+scriptName);
 		if(scriptType==ChannelMedia.SCRIPT_NET) 
@@ -318,13 +334,13 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 				}
 			}
 			vars.put("url",  ChannelUtil.parseASX(rUrl,asx));
-			return ChannelUtil.createMediaUrl(vars, format,ch);
+			return ChannelUtil.createMediaUrl(vars, format,ch,render);
 		}	
 		ArrayList<String> sData=Channels.getScript(scriptName);
 		if(sData==null) { // weird no script found, log and bail out
 			ch.debug("no script "+scriptName+" defined");
 			vars.put("url", url);
-			return ChannelUtil.createMediaUrl(vars,format,ch);
+			return ChannelUtil.createMediaUrl(vars,format,ch,render);
 		}
 		HashMap<String,String> res=ChannelNaviXProc.lite(url,sData,asx,ch);
 		if(res==null) {
@@ -335,7 +351,7 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 		if(live)
 			res.put("live", "true");
 		res.put("__type__", "normal");
-		return ChannelUtil.createMediaUrl(res,format,ch);
+		return ChannelUtil.createMediaUrl(res,format,ch,render);
 	}
 	
 	public boolean scriptOnly() {
@@ -469,14 +485,41 @@ public class ChannelMedia implements ChannelProps,ChannelScraper {
 	}
 	
 	public HashMap<String,Object> subSelect(DLNAResource start,String imdb) {
-		return ChannelSubUtil.subSelect(start, imdb, subtitle, parent);
+		return ChannelSubUtil.subSelect(start, imdb, subtitle, parent, backtrackedName(start));
 	}
 	
 	public HashMap<String,Object> subSelect(DLNAResource start,String imdb,String subSite) {
-		return ChannelSubUtil.subSelect(start, imdb, subSite, subtitle, parent);
+		return ChannelSubUtil.subSelect(start, imdb, subSite, subtitle, parent, backtrackedName(start));
 	}
 	
 	public String relativeURL() {
 		return ChannelUtil.getPropertyValue(prop, "relative_url");
+	}
+
+	public boolean getBoolProp(String p) {
+		return ChannelUtil.getProperty(prop, p);
+	}
+
+	@Override
+	public String lastPlayResolveURL(DLNAResource start) {
+		String resolver=ChannelUtil.getPropertyValue(prop, "last_play_action");
+		if(ChannelUtil.empty(resolver))
+			return null;
+		DLNAResource tmp=start;
+		while(tmp!=null) {
+			if(tmp instanceof Channels)
+				return null;
+			if(!(tmp instanceof ChannelPMSFolder)) {
+				tmp=tmp.getParent();
+				continue;
+			}
+			ChannelPMSFolder f=(ChannelPMSFolder)tmp;
+			ChannelFolder cf=f.getFolder();
+			if(resolver.equals(cf.actionName())) {
+				return f.getURL();
+			}
+			tmp=tmp.getParent();
+		}
+		return null;
 	}
 }

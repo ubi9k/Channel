@@ -1,4 +1,4 @@
-version=0.41
+version=0.46
 
 scriptdef furkSubs {
 	release='1
@@ -95,12 +95,22 @@ macrodef furkMacro {
 		matcher=a class=\"button-large button-play\" href=\"([^\"]+)\">(Play)<
 		order=url
 		type=empty
-		media {
+		 media {
 			matcher=<title>([^<]+)</title>\s+<location>([^<]+)</location>
 			order=name,url
 			subtitle=swesub,s4u,ut.se
-			prop=name_index=0
+			prop=name_index=1
 		}
+	}
+}
+
+macrodef furkPlayItem {
+	media {
+		# <a class="playlist-item" href="http://ie9hajrspg5sg9mgqs4s1tf9nb9j0t3ds40r71g.gcdn.biz/d/R/KNoWaBGevj73PXNXuxaZiISdFFw__hnNo159OhQLI5epxWrSyuW_X1oi88NmdnIZ/01_Enter_Sandman.mp3" class="first" title="Metallica - Metallica (1991)/Metallica - Metallica/01 Enter Sandman.mp3">Metallica - Metallica (1991)/Metallica - Metallica/01 Enter Sandman.mp3</a> 
+		matcher=a class=\"playlist-item\" href=\"([^\"]+)\" .*?title=\"([^\"]+)\"
+		order=url,name
+		subtitle=swesub,s4u,ut.se
+		prop=name_index=0
 	}
 }
 
@@ -109,13 +119,14 @@ macrodef furkFolder {
          matcher=a href=\"(/df/[^\"]+)\">([^<]+)<
          order=url,name
          url=https://www.furk.net/
+         macro=furkPlayItem
 		 macro=furkMacro
-         media {
-            # <a class="playlist-item" href="http://ie9hajrspg5sg9mgqs4s1tf9nb9j0t3ds40r71g.gcdn.biz/d/R/KNoWaBGevj73PXNXuxaZiISdFFw__hnNo159OhQLI5epxWrSyuW_X1oi88NmdnIZ/01_Enter_Sandman.mp3" class="first" title="Metallica - Metallica (1991)/Metallica - Metallica/01 Enter Sandman.mp3">Metallica - Metallica (1991)/Metallica - Metallica/01 Enter Sandman.mp3</a> 
-            matcher=a class=\"playlist-item\" href=\"([^\"]+)\" .*?title=\"([^\"]+)\"
-            order=url,name
-			subtitle=swesub,s4u,ut.se
-         }
+	}
+	folder {
+		type=recurse
+		matcher=a href=\"([^\"]+)\" class=\"nextprev\" title=\"Go to (Next Page)\"
+		order=url,name
+		url=https://www.furk.net/
 	}
 }
 
@@ -130,29 +141,42 @@ channel Furk {
       #params=url=&gigya_uid=
 	  associate=www.furk.net
    }
+   resolve {
+		matcher=magnet:[^=]+=urn:btih:([^&]+)&dn=[^&]+&tr
+		prop=prepend_url=info_hash=
+		action=upload
+   }
    folder {
 		type=action
 		action_name=upload
-		#url=https://www.furk.net/users/files/add
 		url=http://api.furk.net/api/dl/add
 		prop=http_method=post
+		media {
+			# this is qued
+			matcher=(\"found_files\":\"0\").*?\"name\":\"([^\"]+)\"
+			order=url,name
+			prop=bad
+		}
 		folder {
-			matcher=url_page":"([^"]+)
+			matcher=url_page\":\"([^\"]+)\"
+			url=https://www.furk.net/
 			order=url
 			type=empty
+			macro=furkPlayItem
 			macro=furkMacro
 		}
    }
    folder {
 		name=Stored
 		url=http://www.furk.net/users/files/finished
+		prop=continue_name=.*Next Page.*,continue_limit=6
 		macro=furkFolder
   }
   folder {
       name=Search
 	  type=search
 	  url=http://api.furk.net/api/search
-	  prop=prepend_url=format=json;q=
+	  prop=continue_name=.*Next Page.*,continue_limit=6,prepend_url=format=json;q=
 	  folder {
          matcher=url_page\":\"([^\"]+)\".*?name\":\"([^\"]+)\"
          order=url,name
@@ -165,3 +189,4 @@ channel Furk {
 	}
   }
 }
+ 
